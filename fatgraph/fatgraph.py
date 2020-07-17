@@ -1,5 +1,9 @@
 import re
+from itertools import accumulate
+from operator import mul
 from permutation import Permutation
+
+import numpy as np
 
 DONOR_COL = 12
 ACCPT_COL = 13
@@ -226,6 +230,147 @@ class FatgraphB(Fatgraph):
         return cls(fatgraph.vertices,
                    fatgraph.edges,
                    interiors)
+
+    @classmethod
+    def from_pmat(cls, mat):
+        "Make fatgraph from pairing matrix"
+        '''
+        [[0,0,0],     vertices: [(1,2,3,4,5,6),]
+         [1,0,0], --> edges: [(2,3), (5,6)]
+         [0,1,0]]     i_edges: [(1,6), (2,5), (3,4)]
+        '''
+
+        def findsheetat(k, mat):
+            "Find sheet that starts with k'th strand"
+            sheet = [k]
+            row = mat[k]
+            if np.count_nonzero(row) > 1:
+                raise ValueError('Sheet must start at an edge strand.')
+            elif np.count_nonzero(row) < 1:
+                return sheet
+            prevk = k
+            thisk = np.flatnonzero(row)[0]
+            thisrow = mat[thisk]
+            while np.count_nonzero(thisrow) != 1:
+                if thisk in sheet:
+                    raise ValueError('Pairing matrix has barrel(s).')
+                sheet.append(thisk)
+                i, j = np.flatnonzero(thisrow)
+                if i == prevk:
+                    nextk = j
+                else:
+                    nextk = i
+                prevk, thisk = thisk, nextk
+                thisrow = mat[thisk]
+            else:
+                if thisk in sheet:
+                    raise ValueError('Pairing matrix has barrel(s).')
+                sheet.append(thisk)
+            return sheet
+
+        def findsheets(p_mat):
+            "Sheets from (symmetric) pairting matrix"
+            '''
+            findsheets([[0,0,1,0],
+                        [0,0,1,0],
+                        [1,1,0,0],
+                        [0,0,0,0]])
+            --> {(0,2,1),(3,)}
+            '''
+            wmat = np.copy(p_mat)
+            edges = [i for i in range(len(wmat))
+                     if np.count_nonzero(wmat[i])<2]
+            if not edges:
+                raise ValueError('Pairing matrix has no edge strand.')
+            sheets = set()
+            while edges:
+                e = edges.pop(0)
+                sheet = tuple(findsheetat(e, wmat))
+                if sheet[0] > sheet[-1]:
+                    sheet = sheet[::-1]
+                sheets.add(sheet)
+                if sheet[-1] in edges:
+                    edges.remove(sheet[-1])
+            return sheets
+
+        def makevertices(sheets, p_mat):
+            "Vertices from sheets and pairing matrix."
+            '''
+            [[0,1,2]], [[0, 0, 0],
+                        [1, 0, 1], --> [[(0,1),(11,10),(21,20)]]
+                        [0, 0, 0]]
+            '''
+            vertices = []
+            for sheet in sheets:
+                oseq = []
+                for i, j in zip(sheet, sheet[1:]):
+                    if i > j:
+                        i, j = j, i
+                    if p_mat[i,j]:
+                        oseq.append(1)
+                    else:
+                        oseq.append(-1)
+                    oseq = list(accumulate(oseq, mul))
+                vertex = []
+                i = sheet[0]
+                vertex.append((i*10, i*10+1))
+                for i, s in enumerate(sheet[1:]):
+                    if oseq[i]>0:
+                        vertex.append((s*10, s*10+1))
+                    else:
+                        vertex.append((s*10+1, s*10))
+                first = min(vertex)
+                if first[0] > first[1]:
+                    vertex = [(s[1],s[0]) for s in vertex]
+                vertices.append(vertex)
+            return vertices
+
+        symmat = mat + mat.T
+        if np.where(np.sum(symmat, axis=1)<1)[0].size:
+            raise ValueError('Pairing matrix has isolated strand(s).')
+        if np.where(np.sum(symmat, axis=1)>2)[0].size:
+            raise ValueError('Pairing matrix has bifurcation(s).')
+        sheets = findsheets(symmat)
+        if len(mat) != len([i for sheet in sheets for i in sheet]):
+            raise ValueError('Pairing matrix has barrel(s).')
+        vertices = makevertices(sheets, mat)
+        vdict = {}
+        for vertex in vertices:
+            #We want anti-clockwise ordering of half-edges on each vertex
+            l = [v[0] for v in vertex] + [v[1] for v in vertex][::-1]
+            r = len(vdict)
+            for i in range(r, r+len(l)):
+                vdict[l[i - r]] = i + 1
+
+        #Now we find edges
+        halfedges = sorted([i for vertex in vertices
+                            for v in vertex
+                            for i in v])
+        edges = [(i, j) for i, j in zip(halfedges, halfedges[1:])]
+        #edges = [(halfedges[i], halfedges[i+1])
+        #         for i in range(1, len(halfedges)-2, 2)]
+
+        #Translate vertices and edges according to vdict
+        v = []
+        p = 1
+        for vertex in vertices:
+            v.append(tuple(range(p, 2*len(vertex)+p)))
+            p += 2*len(vertex)
+
+        iv = []
+        iedges = [e for vertex in vertices for e in vertex]
+        for e in iedges:
+            iv.append((vdict[e[0]], vdict[e[1]]))
+
+        e = []
+        for d in edges:
+            edge = (vdict[d[0]], vdict[d[1]])
+            if edge[0] > edge[1]:
+                edge = edge[::-1]
+            if edge not in iv:
+                e.append(edge)
+
+        return cls(v, e, iv)
 
     def isvalid(self):
         '''
