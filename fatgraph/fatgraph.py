@@ -326,8 +326,6 @@ class FatgraphB(Fatgraph):
             return vertices
 
         symmat = mat + mat.T
-        if np.where(np.sum(symmat, axis=1)<1)[0].size:
-            raise ValueError('Pairing matrix has isolated strand(s).')
         if np.where(np.sum(symmat, axis=1)>2)[0].size:
             raise ValueError('Pairing matrix has bifurcation(s).')
         sheets = findsheets(symmat)

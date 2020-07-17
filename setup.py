@@ -6,7 +6,7 @@ from distutils.core import setup
 # noinspection PyArgumentList
 setup(
     name='fatgraph',
-    version='1.0.1',
+    version='1.0.2',
     author='Yuki Koyanagi',
     author_email='yuki@math.au.dk',
     packages=['fatgraph'],

@@ -41,11 +41,6 @@ class TestFatgraphB(object):
         assert fg.isvalid()
 
     def test_from_pmat(self):
-        mat = np.array([[0,0,0],
-                        [0,0,1],
-                        [0,0,0]])
-        with pytest.raises(ValueError):
-            fgb = FatgraphB.from_pmat(mat)
         mat = np.array([[0,1,0,0],
                         [0,0,1,1],
                         [0,0,0,0],
@@ -68,15 +63,22 @@ class TestFatgraphB(object):
                         [1,0,0],
                         [0,1,0]])
         fg = FatgraphB([(1,2,3,4,5,6),],
-                      [(2,3), ((5,6))],
+                      [(2,3), (5,6)],
                       [(1,6), (2,5), (3,4)])
         assert FatgraphB.from_pmat(mat) == fg
         mat = np.array([[0,0,0],
                         [1,0,0],
                         [1,0,0]])
         fg = FatgraphB([(1,2,3,4,5,6),],
-                      [(1,4), ((5,6))],
+                      [(1,4), (5,6)],
                       [(1,6), (2,5), (3,4)])
+        assert FatgraphB.from_pmat(mat) == fg
+        mat = np.array([[0,0,0],
+                        [1,0,0],
+                        [0,0,0]])
+        fg = FatgraphB([(1,2,3,4),(5,6)],
+                      [(3,4), (2,5)],
+                      [(1,4), (2,3), (5,6)])
         assert FatgraphB.from_pmat(mat) == fg
 
 class TestFatgraph(object):
@@ -97,6 +99,9 @@ class TestFatgraph(object):
         assert g2.genus == 1
         g3 = Fatgraph([], [])
         assert g3.genus == 0
+        g4 = Fatgraph([(1,2,3,4),(5,6)], [(3,4), (2,5)])
+        assert len(g4.boundaries) == 2
+        assert g4.genus == 0
 
         with pytest.raises(ValueError):
             assert Fatgraph([(1,2,3), (3,4)], [(1,2), (3,4)])
